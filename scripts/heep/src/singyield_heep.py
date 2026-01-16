@@ -20,9 +20,9 @@ import numpy as np
 np.bool = bool
 np.float = float
 
-import root_numpy as rnp
+#import root_numpy as rnp not compatible
 import pandas as pd
-import root_pandas as rpd
+#import root_pandas as rpd
 import ROOT
 import scipy
 import scipy.integrate as integrate
@@ -62,6 +62,10 @@ if Spec == "HMS":
    # defining Cuts
    cuts = ["sing_ee_cut_all_noRF"]
    lt=Root(os.path.realpath(__file__),"HeePSing_HMS",ROOTPrefix,runNum,MaxEvent,cut_f,cuts)
+
+   # Override where ltsep looks for the input ROOT file
+   lt.ROOTFILEPATH = "/volatile/hallc/c-pionlt/junaid/ROOTfiles/Analysis/HeeP"
+
 if Spec == "SHMS":
    cut_f = '/DB/CUTS/run_type/pSing_heep.cuts'
    # defining Cuts
@@ -69,6 +73,7 @@ if Spec == "SHMS":
    lt=Root(os.path.realpath(__file__),"HeePSing_SHMS",ROOTPrefix,runNum,MaxEvent,cut_f,cuts)
 
 OUTPATH=lt.OUTPATH
+print(OUTPATH)
 
 proc_root = lt.setup_ana()
 c = proc_root[0] # Cut object
@@ -84,7 +89,7 @@ def sing_electrons():
        NoCut_SING_Electrons = [tree["H_gtr_beta"], tree["H_gtr_xp"], tree["H_gtr_yp"], tree["H_gtr_dp"], tree["H_gtr_p"], tree["H_dc_x_fp"], tree["H_dc_y_fp"], tree["H_dc_xp_fp"], tree["H_dc_yp_fp"], tree["H_hod_goodscinhit"], tree["H_hod_goodstarttime"], tree["H_cal_etotnorm"], tree["H_cal_etottracknorm"], tree["H_cer_npeSum"], tree["H_RF_Dist"], tree["Q2"], tree["H_W"], tree["epsilon"], tree["ph_q"], tree["MandelT"], tree["pmiss"], tree["pmiss_x"], tree["pmiss_y"], tree["pmiss_z"], tree["emiss"], tree["Erecoil"], tree["Mrecoil"]]
 
        Uncut_SING_Electrons = [(tree["H_gtr_beta"], tree["H_gtr_xp"], tree["H_gtr_yp"], tree["H_gtr_dp"], tree["H_gtr_p"], tree["H_dc_x_fp"], tree["H_dc_y_fp"], tree["H_dc_xp_fp"], tree["H_dc_yp_fp"], tree["H_hod_goodscinhit"], tree["H_hod_goodstarttime"], tree["H_cal_etotnorm"], tree["H_cal_etottracknorm"], tree["H_cer_npeSum"], tree["H_RF_Dist"], tree["Q2"], tree["H_W"], tree["epsilon"], tree["ph_q"], tree["MandelT"], tree["pmiss"], tree["pmiss_x"], tree["pmiss_y"], tree["pmiss_z"], tree["emiss"], tree["Erecoil"], tree["Mrecoil"]) for (tree["H_gtr_beta"], tree["H_gtr_xp"], tree["H_gtr_yp"], tree["H_gtr_dp"], tree["H_gtr_p"], tree["H_dc_x_fp"], tree["H_dc_y_fp"], tree["H_dc_xp_fp"], tree["H_dc_yp_fp"], tree["H_hod_goodscinhit"], tree["H_hod_goodstarttime"], tree["H_cal_etotnorm"], tree["H_cal_etottracknorm"], tree["H_cer_npeSum"], tree["H_RF_Dist"], tree["Q2"], tree["H_W"], tree["epsilon"], tree["ph_q"], tree["MandelT"], tree["pmiss"], tree["pmiss_x"], tree["pmiss_y"], tree["pmiss_z"], tree["emiss"], tree["Erecoil"], tree["Mrecoil"]) in zip(*NoCut_SING_Electrons)
-            ]
+            ]    
 
        # Create array of arrays of pions after cuts, all events, prompt and random          
        Cut_SING_Electrons_tmp = NoCut_SING_Electrons
@@ -140,19 +145,39 @@ def main():
     data.update(SING_Electron_Data)
     data_keys = list(data.keys()) # Create a list of all the keys in all dicts added above, each is an array of data                                                                                       
 
-    for i in range (0, len(data_keys)):
-        if("Electron" in data_keys[i]):
-            DFHeader=list(SING_Electron_Data_Header)
-        else:
-            continue
-            # Uncomment the line below if you want .csv file output, WARNING the files can be very large and take a long time to process!                                                                      
-            #pd.DataFrame(data.get(data_keys[i])).to_csv("%s/%s_%s.csv" % (OUTPATH, data_keys[i], runNum), header=DFHeader, index=False) # Convert array to panda dataframe and write to csv with correct header
-        
-        if (i == 0):
-            pd.DataFrame(data.get(data_keys[i]), columns = DFHeader, index = None).to_root("%s/%s_%s_%s_Analysed_Data.root" % (OUTPATH, runNum, MaxEvent, Spec), key ="%s" % data_keys[i])
 
-        elif (i != 0):
-            pd.DataFrame(data.get(data_keys[i]), columns = DFHeader, index = None).to_root("%s/%s_%s_%s_Analysed_Data.root" % (OUTPATH, runNum, MaxEvent, Spec), key ="%s" % data_keys[i], mode ='a')
+
+    outname = f"{OUTPATH}/{runNum}_{MaxEvent}_{Spec}_Analysed_Data.root"
+
+    # Convert your tuples into column arrays
+    # data["Uncut_Electron_Events"] and data["Cut_Electron_Events_All"] are lists of tuples (event-by-event)
+    # We need dict-of-arrays for uproot.
+
+    def tuples_to_branches(tuple_list, headers):
+        # tuple_list: [(v1,v2,...), (v1,v2,...), ...]
+        # returns {"branch": np.array([...]), ...}
+        if len(tuple_list) == 0:
+            return {h: np.array([], dtype=np.float32) for h in headers}
+        arr = np.array(tuple_list, dtype=np.float64)   # shape (Nevents, Nvars)
+        return {headers[i]: arr[:, i] for i in range(len(headers))}
+
+    with uproot.recreate(outname) as fout:
+        # Write each “Electron” dataset as its own TTree
+
+        for key in data_keys:
+            if "Electron" not in key:
+                continue
+
+            if Spec == "HMS":
+                headers = SING_Electron_Data_Header
+            else:
+                headers = SING_Electron_Data_Header
+
+            branches = tuples_to_branches(data[key], headers)
+            fout[key] = branches
+
+    print(f"Wrote output ROOT file: {outname}")
+
 if __name__ == '__main__':
     main()
 print ("Processing Complete")
