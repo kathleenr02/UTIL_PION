@@ -134,7 +134,7 @@ class SetPath():
             USER = PACKAGE_ENV.split("/.local")[0]
             USER = USER.split("home/")[1]
         else:
-            USER = os.getlogin()
+            USER = os.environ.get("USER", os.environ.get("LOGNAME", "kramage"))
 
         # Grab hostname
         HOST = os.uname()[1]

@@ -54,15 +54,16 @@ fi
 
 # Runs script in the ltsep python package that grabs current path enviroment
 if [[ ${HOSTNAME} = *"cdaq"* ]]; then
-    PATHFILE_INFO=`python3 /home/cdaq/pionLT-2021/hallc_replay_lt/UTIL_PION/bin/python/ltsep_pionlt/scripts/getPathDict.py $PWD` # The output of this python script is just a comma separated string
-elif [[ "${HOSTNAME}" = *"farm"* ]]; then
-    PATHFILE_INFO=`python3 /u/group/c-pionlt/USERS/${USER}/replay_lt_env/lib/python3.9/site-packages/ltsep/scripts/getPathDict.py $PWD` # The output of this python script is just a comma separated string
+    PATHFILE_INFO=$(python3 /home/cdaq/pionLT-2021/hallc_replay_lt/UTIL_PION/bin/python/ltsep_pionlt/scripts/getPathDict.py "$PWD")
+else
+    PATHFILE_INFO=$(python3 /group/c-pionlt/USERS/${USER}/replay_lt_env/lib/python3.9/site-packages/ltsep/scripts/getPathDict.py "$PWD")
 fi
 
 # Split the string we get to individual variables, easier for printing and use later
 VOLATILEPATH=`echo ${PATHFILE_INFO} | cut -d ','  -f1` # Cut the string on , delimitter, select field (f) 1, set variable to output of command
 ANALYSISPATH=`echo ${PATHFILE_INFO} | cut -d ','  -f2`
 HCANAPATH=`echo ${PATHFILE_INFO} | cut -d ','  -f3`
+HCANAPATH="/u/group/c-pionlt/hcana_08_10_24_Root6_24_08_Alma9_HodoEffUpdate"
 REPLAYPATH=`echo ${PATHFILE_INFO} | cut -d ','  -f4`
 UTILPATH=`echo ${PATHFILE_INFO} | cut -d ','  -f5`
 PACKAGEPATH=`echo ${PATHFILE_INFO} | cut -d ','  -f6`
@@ -73,14 +74,13 @@ CUTPATH=`echo ${PATHFILE_INFO} | cut -d ','  -f10`
 PARAMPATH=`echo ${PATHFILE_INFO} | cut -d ','  -f11`
 SCRIPTPATH=`echo ${PATHFILE_INFO} | cut -d ','  -f12`
 ANATYPE=`echo ${PATHFILE_INFO} | cut -d ','  -f13`
-USER=`echo ${PATHFILE_INFO} | cut -d ','  -f14`
+LTUSER=`echo ${PATHFILE_INFO} | cut -d ','  -f14`
 HOST=`echo ${PATHFILE_INFO} | cut -d ','  -f15`
 
 # Source stuff depending upon hostname. Change or add more as needed  
 if [[ "${HOST}" = *"farm"* ]]; then
     if [[ "${HOST}" != *"ifarm"* ]]; then
-	source /site/12gev_phys/softenv.sh 2.3
-	source /apps/root/6.18.04/setroot_CUE.bash
+        echo "Using ROOT/module setup from wrapper script"
     fi
     cd "$HCANAPATH"
     source "$HCANAPATH/setup.sh"
@@ -93,34 +93,33 @@ fi
 cd "$REPLAYPATH"
 
 ###################################################################################################################################################
-if [ ! -f "$UTILPATH/ROOTfiles/Scalers/coin_replay_scalers_${RUNNUMBER}_${MAXEVENTS}.root" ]; then
-    eval "$REPLAYPATH/hcana -l -q -b \"SCRIPTS/COIN/SCALERS/PionLT/replay_coin_scalers.C($RUNNUMBER,${MAXEVENTS})\""
-    cd "$REPLAYPATH/CALIBRATION/bcm_current_map"
-    root -b -l<<EOF 
+echo "Running scaler replay / BCM calibration for ${RUNNUMBER}..."
+
+rm -f "$REPLAYPATH/ROOTfiles/Scalers/coin_replay_scalers_${RUNNUMBER}_${MAXEVENTS}.root"
+rm -f "$REPLAYPATH/PARAM/HMS/BCM/CALIB/bcmcurrent_${RUNNUMBER}.param"
+
+eval "$REPLAYPATH/hcana -l -q -b \"SCRIPTS/COIN/SCALERS/replay_coin_scalers.C($RUNNUMBER,${MAXEVENTS})\""
+
+cd "$REPLAYPATH/CALIBRATION/bcm_current_map"
+
+root -b -l<<EOF 
 .L ScalerCalib.C
-.x run.C("${UTILPATH}/ROOTfiles/Scalers/coin_replay_scalers_${RUNNUMBER}_${MAXEVENTS}.root")
+.x run.C("${REPLAYPATH}/ROOTfiles/Scalers/coin_replay_scalers_${RUNNUMBER}_${MAXEVENTS}.root")
 .q  
 EOF
-    mv bcmcurrent_${RUNNUMBER}.param $REPLAYPATH/PARAM/HMS/BCM/CALIB/bcmcurrent_$RUNNUMBER.param
-    echo "moving output: mv bcmcurrent_${RUNNUMBER}.param $REPLAYPATH/PARAM/HMS/BCM/CALIB/bcmcurrent_$RUNNUMBER.param"
-    cd $REPLAYPATH
-else echo "Scaler replayfile already found for this run in $REPLAYPATH/ROOTfiles/Scalers - Skipping scaler replay step"
-fi
+
+mv bcmcurrent_${RUNNUMBER}.param "$REPLAYPATH/PARAM/HMS/BCM/CALIB/bcmcurrent_${RUNNUMBER}.param"
+echo "moving output: mv bcmcurrent_${RUNNUMBER}.param $REPLAYPATH/PARAM/HMS/BCM/CALIB/bcmcurrent_${RUNNUMBER}.param"
+
+cd "$REPLAYPATH"
 
 sleep 3
 
-if [ ! -f "$UTILPATH/ROOTfiles/Analysis/Lumi/${ANATYPE}LT_replay_luminosity_${RUNNUMBER}_${MAXEVENTS}.root" ]; then
-    if [[ "${HOSTNAME}" != *"ifarm"* ]]; then
-	if [[ "${HOSTNAME}" == *"cdaq"* ]]; then
-	    eval "$REPLAYPATH/hcana -l -q -b \"SCRIPTS/COIN/PRODUCTION/PionLT_REPLAY/FullReplay_PionLT_LumiTest.C($RUNNUMBER,$MAXEVENTS)\""| tee $UTILPATH/REPORT_OUTPUT/Analysis/Lumi/${ANATYPE}LT_output_coin_production_Summary_${RUNNUMBER}_${MAXEVENTS}.report
-	else	
-	    eval "$REPLAYPATH/hcana -l -q -b \"SCRIPTS/COIN/PRODUCTION/PionLT_REPLAY/FullReplay_PionLT_LumiTest.C($RUNNUMBER,$MAXEVENTS)\"" 
-	fi
-    elif [[ "${HOSTNAME}" == *"ifarm"* ]]; then
-	eval "$REPLAYPATH/hcana -l -q -b \"SCRIPTS/COIN/PRODUCTION/PionLT_REPLAY/FullReplay_PionLT_LumiTest.C($RUNNUMBER,$MAXEVENTS)\""| tee $UTILPATH/REPORT_OUTPUT/Analysis/Lumi/${ANATYPE}LT_output_coin_production_Summary_${RUNNUMBER}_${MAXEVENTS}.report
-    fi
-else echo "Replayfile already found for this run in $UTILPATH/ROOTfiles/Analysis/Lumi/ - Skipping replay step"
-fi
+rm -f "$REPLAYPATH/ROOTfiles/Analysis/Lumi/${ANATYPE}LT_replay_luminosity_${RUNNUMBER}_${MAXEVENTS}.root"
+
+echo "Running full lumi replay for ${RUNNUMBER} ${MAXEVENTS} (overwrite mode)..."
+
+eval "$REPLAYPATH/hcana -l -q -b \"SCRIPTS/COIN/PRODUCTION/PionLT_REPLAY/FullReplay_PionLT_LumiTest.C($RUNNUMBER,$MAXEVENTS)\"" | tee "$REPLAYPATH/REPORT_OUTPUT/Analysis/Lumi/${ANATYPE}LT_replay_luminosity_${RUNNUMBER}_${MAXEVENTS}.report"
 
 sleep 3
 

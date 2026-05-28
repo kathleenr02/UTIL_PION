@@ -335,7 +335,7 @@ class Help():
         PACKAGE_ENV = os.path.dirname(os.path.realpath(__file__))
 
         # Grab username and hostname
-        USER = os.getlogin()
+        USER = os.environ.get("USER", os.environ.get("LOGNAME", "kramage"))
         HOST = os.uname()[1]
 
         # Setup path to pathing files (see PATH_TO_DIR)

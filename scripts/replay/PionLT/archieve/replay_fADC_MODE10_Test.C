@@ -26,7 +26,7 @@ void replay_fADC_MODE10_Test (Int_t RunNumber = 0, Int_t MaxEvent = 0) {
 
   //const char* RunFileNamePattern = "raw/coin_all_%05d.dat";
   const char* ROOTFileNamePattern = "ROOTfiles/Analysis/general/Pion_coin_replay_production_%d_%d.root";
-  // const char* ROOTFileNamePattern = "/group/c-kaonlt/USERS/vijay/hallc_replay_lt/UTIL_KAONLT/scripts/HeepCoinStudy/OUTPUT/Pion_coin_replay_production_%d_%d_VK.root";
+  // const char* ROOTFileNamePattern = "/group/c-pionlt/USERS/vijay/hallc_replay_lt/UTIL_KAONLT/scripts/HeepCoinStudy/OUTPUT/Pion_coin_replay_production_%d_%d_VK.root";
   
   // Load global parameters
   gHcParms->Define("gen_run_number", "Run Number", RunNumber);
